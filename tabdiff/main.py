@@ -128,7 +128,7 @@ def main(args):
         train_data,
         batch_size = batch_size,
         shuffle = True,
-        num_workers = 4,
+        num_workers = 0,
     )
     d_numerical, categories = train_data.d_numerical, train_data.categories
     

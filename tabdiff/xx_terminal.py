@@ -2,6 +2,11 @@
 ## Commands to run in the terminal
 
 # conda activate tabdiff
+
+## Data prep
+# python download_dataset.py
+# python process_dataset.py
+
 # python main.py --dataname diabetes --mode train --no_wandb
 # python main.py --dataname diabetes --mode test --report --no_wandb
 # python main.py --dataname diabetes --mode train --y_only --no_wandb

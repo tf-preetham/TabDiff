@@ -30,9 +30,15 @@ warnings.filterwarnings('ignore')
 num_runs = 20
 is_dcr = False
 device = 'cuda'
-mode = 'test'
+mode = 'train'
 report = True
 no_wandb = True
+y_only = True
+debug = False
+
+## Set experiment name
+exp_name = None
+non_learnable_schedule = False
 
 ## Disable scientific numerical format
 np.set_printoptions(suppress=True)
@@ -47,11 +53,6 @@ with open(info_path, 'r') as f:
 
 ## Set up flags
 is_dcr = 'dcr' in dataname
-y_only = None
-
-## Set experiment name
-exp_name = None
-non_learnable_schedule = False
 
 if exp_name is None:
     exp_name = 'non_learnable_schedule' if non_learnable_schedule else 'learnable_schedule'
@@ -84,11 +85,11 @@ elif mode == 'test':
             print(f"Found cached config at {config_path}")
     raw_config = cached_raw_config
 
-debug = False
+
 ## Creat model_save and result paths
 model_save_path, result_save_path = None, None
 if mode == 'train':
-    model_save_path = os.path.join('debug', 'ckpt') if debug else os.path.join(curr_dir, 'ckpt', dataname, exp_name)
+    model_save_path = os.path.join('debug', 'ckpt') if debug else os.path.join(curr_dir, 'tabdiff', 'ckpt', dataname, exp_name)
     result_save_path = model_save_path.replace('ckpt', 'result')  #i.e., f'{curr_dir}\results\{dataname}\{exp_name}'
 elif mode == 'test':
     if report:
@@ -138,7 +139,7 @@ train_loader = DataLoader(
     train_data,
     batch_size = batch_size,
     shuffle = True,
-    num_workers = 4,
+    num_workers = 0,
 )
 d_numerical, categories = train_data.d_numerical, train_data.categories
 
@@ -171,30 +172,30 @@ raw_config['unimodmlp_params']['d_numerical'] = d_numerical
 raw_config['unimodmlp_params']['categories'] = (categories+1).tolist()  # add one for the mask category
 
 
-# if y_only:
-#     raw_config['unimodmlp_params']['use_mlp'] = False     # drop the mlp when training the unconditional model
-#     raw_config['unimodmlp_params']['dim_t'] = 128   #reduce the size of the mlp
-#     main_model_path = ckpt_path
-#     if main_model_path is None:
-#         main_model_parent_path = os.path.join(curr_dir, 'ckpt', dataname, exp_name.replace('_y_only', ''))
-#         main_model_path_arr = glob.glob(os.path.join(main_model_parent_path, 'best_ema_model*'))
-#         assert main_model_path_arr, f"Cannot not infer the main model's ckpt_path from {main_model_parent_path}, please make sure that you first train a main model before training the y_only model!"
-#         main_model_path = main_model_path_arr[0]
-#     main_model_configs = pickle.load(open(os.path.join(os.path.dirname(main_model_path), 'config.pkl'), 'rb'))
-#     if main_model_configs['diffusion_params']['scheduler'] == "power_mean_per_column": # if learnable schedule is enabled in the main model, we need to infer noise params of the target column from the main model ckpt and train the y_only model with those params
-#         from tabdiff.models.noise_schedule import PowerMeanNoise_PerColumn, LogLinearNoise_PerColumn
-#         if info['task_type'] == 'regression':
-#             noise_schedule = PowerMeanNoise_PerColumn(
-#                 num_numerical=main_model_configs['unimodmlp_params']['d_numerical'], 
-#                 **main_model_configs['diffusion_params']['noise_schedule_params']
-#             )
-#             raw_config['diffusion_params']['noise_schedule_params']['rho'] = noise_schedule.rho()[0].item()    # the target col is placed at the first position
-#         else:
-#             noise_schedule = LogLinearNoise_PerColumn(
-#                 num_categories=len(main_model_configs['unimodmlp_params']['categories']), 
-#                 **main_model_configs['diffusion_params']['noise_schedule_params']
-#             )
-#             raw_config['diffusion_params']['noise_schedule_params']['k'] = noise_schedule.k()[0].item()    # the target col is placed at the first position
+if y_only:
+    raw_config['unimodmlp_params']['use_mlp'] = False     # drop the mlp when training the unconditional model
+    raw_config['unimodmlp_params']['dim_t'] = 128   #reduce the size of the mlp
+    main_model_path = ckpt_path
+    if main_model_path is None:
+        main_model_parent_path = os.path.join(curr_dir,'tabdiff', 'ckpt', dataname, exp_name.replace('_y_only', ''))
+        main_model_path_arr = glob.glob(os.path.join(main_model_parent_path, 'best_ema_model*'))
+        assert main_model_path_arr, f"Cannot not infer the main model's ckpt_path from {main_model_parent_path}, please make sure that you first train a main model before training the y_only model!"
+        main_model_path = main_model_path_arr[0]
+    main_model_configs = pickle.load(open(os.path.join(os.path.dirname(main_model_path), 'config.pkl'), 'rb'))
+    if main_model_configs['diffusion_params']['scheduler'] == "power_mean_per_column": # if learnable schedule is enabled in the main model, we need to infer noise params of the target column from the main model ckpt and train the y_only model with those params
+        from tabdiff.models.noise_schedule import PowerMeanNoise_PerColumn, LogLinearNoise_PerColumn
+        if info['task_type'] == 'regression':
+            noise_schedule = PowerMeanNoise_PerColumn(
+                num_numerical=main_model_configs['unimodmlp_params']['d_numerical'], 
+                **main_model_configs['diffusion_params']['noise_schedule_params']
+            )
+            raw_config['diffusion_params']['noise_schedule_params']['rho'] = noise_schedule.rho()[0].item()    # the target col is placed at the first position
+        else:
+            noise_schedule = LogLinearNoise_PerColumn(
+                num_categories=len(main_model_configs['unimodmlp_params']['categories']), 
+                **main_model_configs['diffusion_params']['noise_schedule_params']
+            )
+            raw_config['diffusion_params']['noise_schedule_params']['k'] = noise_schedule.k()[0].item()    # the target col is placed at the first position
         
 backbone = UniModMLP(
     **raw_config['unimodmlp_params']
@@ -298,3 +299,4 @@ else:
     with open (os.path.join(config_save_path, 'config.pkl'), 'wb') as f:
         pickle.dump(raw_config, f)
     trainer.run_loop()
+
