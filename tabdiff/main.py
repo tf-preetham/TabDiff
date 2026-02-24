@@ -35,8 +35,8 @@ def main(args):
 
     ## Get data info
     dataname = args.dataname
-    data_dir = f'data/{dataname}'
-    info_path = f'data/{dataname}/info.json'
+    data_dir = os.path.join('data', dataname)
+    info_path = os.path.join('data', dataname, 'info.json')
     with open(info_path, 'r') as f:
         info = json.load(f)
     
@@ -51,7 +51,7 @@ def main(args):
     
     ## Load configs
     curr_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = f'{curr_dir}/configs/tabdiff_configs.toml'
+    config_path = os.path.join(curr_dir, 'configs', 'tabdiff_configs.toml')
     raw_config = src.load_config(config_path)
     
     print(f"{args.mode.capitalize()} Mode is Enabled")
@@ -63,8 +63,8 @@ def main(args):
         num_samples_to_generate = args.num_samples_to_generate
         ckpt_path = args.ckpt_path
         if ckpt_path is None:
-            ckpt_parent_path = f"{curr_dir}/ckpt/{dataname}/{exp_name}"
-            ckpt_path_arr = glob.glob(f"{ckpt_parent_path}/best_ema_model*")
+            ckpt_parent_path = os.path.join(curr_dir, 'ckpt', dataname, exp_name)
+            ckpt_path_arr = glob.glob(os.path.join(ckpt_parent_path, 'best_ema_model*'))
             assert ckpt_path_arr, f"Cannot not infer ckpt_path from {ckpt_parent_path}, please make sure that you first train a model before testing!"
             ckpt_path = ckpt_path_arr[0]
         config_path = os.path.join(os.path.dirname(ckpt_path), 'config.pkl')
@@ -78,11 +78,11 @@ def main(args):
     ## Creat model_save and result paths
     model_save_path, result_save_path = None, None
     if args.mode == 'train':
-        model_save_path = 'debug/ckpt' if args.debug else f'{curr_dir}/ckpt/{dataname}/{exp_name}'
-        result_save_path = model_save_path.replace('ckpt', 'result')  #i.e., f'{curr_dir}/results/{dataname}/{exp_name}'
+        model_save_path = os.path.join('debug', 'ckpt') if args.debug else os.path.join(curr_dir, 'ckpt', dataname, exp_name)
+        result_save_path = model_save_path.replace('ckpt', 'result')  #i.e., f'{curr_dir}\results\{dataname}\{exp_name}'
     elif args.mode == 'test':
         if args.report:
-            result_save_path = f"eval/report_runs/{exp_name}/{dataname}"
+            result_save_path = os.path.join("eval", "report_runs", exp_name, dataname)
         else:
             result_save_path = os.path.dirname(ckpt_path).replace('ckpt', 'result')    # infer the exp_name from the ckpt_name
     raw_config['model_save_path'] = model_save_path
@@ -135,9 +135,9 @@ def main(args):
     val_data = TabDiffDataset(dataname, data_dir, info, y_only=args.y_only, isTrain=False, dequant_dist=raw_config['data']['dequant_dist'], int_dequant_factor=raw_config['data']['int_dequant_factor'])
 
     ## Load Metrics
-    real_data_path = f'synthetic/{dataname}/real.csv'
-    test_data_path = f'synthetic/{dataname}/test.csv'
-    val_data_path = f'synthetic/{dataname}/val.csv'
+    real_data_path = os.path.join('synthetic', dataname, 'real.csv')
+    test_data_path = os.path.join('synthetic', dataname, 'test.csv')
+    val_data_path = os.path.join('synthetic', dataname, 'val.csv')
     if not os.path.exists(val_data_path):
         print(f"{args.dataname} does not have its validation set. During MLE evaluation, a validation set will be splitted from the training set!")
         val_data_path = None
@@ -162,8 +162,8 @@ def main(args):
         raw_config['unimodmlp_params']['dim_t'] = 128   #reduce the size of the mlp
         main_model_path = args.ckpt_path
         if main_model_path is None:
-            main_model_parent_path = f"{curr_dir}/ckpt/{dataname}/{exp_name.replace('_y_only', '')}"
-            main_model_path_arr = glob.glob(f"{main_model_parent_path}/best_ema_model*")
+            main_model_parent_path = os.path.join(curr_dir, 'ckpt', dataname, exp_name.replace('_y_only', ''))
+            main_model_path_arr = glob.glob(os.path.join(main_model_parent_path, 'best_ema_model*'))
             assert main_model_path_arr, f"Cannot not infer the main model's ckpt_path from {main_model_parent_path}, please make sure that you first train a main model before training the y_only model!"
             main_model_path = main_model_path_arr[0]
         main_model_configs = pickle.load(open(os.path.join(os.path.dirname(main_model_path), 'config.pkl'), 'rb'))
@@ -193,8 +193,8 @@ def main(args):
     if args.impute:
         y_only_model_path = args.y_only_model_path
         if y_only_model_path is None:
-            y_only_model_parent_path = f"{curr_dir}/ckpt/{dataname}/{exp_name}_y_only"
-            y_only_model_path_arr = glob.glob(f"{y_only_model_parent_path}/best_ema_model*")
+            y_only_model_parent_path = os.path.join(curr_dir, 'ckpt', dataname, f"{exp_name}_y_only")
+            y_only_model_path_arr = glob.glob(os.path.join(y_only_model_parent_path, 'best_ema_model*'))
             assert y_only_model_path_arr, f"Cannot not infer y_only model's ckpt_path from {y_only_model_parent_path}, please make sure that you first train a y_only model before testing imputation!"
             y_only_model_path = y_only_model_path_arr[0]
         y_only_model_config_path = os.path.join(os.path.dirname(y_only_model_path), 'config.pkl')
@@ -264,7 +264,7 @@ def main(args):
             else:
                 trainer.report_test(args.num_runs)
         elif args.impute:
-            imputed_sample_save_dir = f"impute/{dataname}/{exp_name}"
+            imputed_sample_save_dir = os.path.join("impute", dataname, exp_name)
             trainer.test_impute(
                 args.trial_start, args.trial_size, 
                 args.resample_rounds, 
